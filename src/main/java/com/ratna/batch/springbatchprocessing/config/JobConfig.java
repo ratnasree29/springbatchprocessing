@@ -1,6 +1,7 @@
 package com.ratna.batch.springbatchprocessing.config;
 
 import com.ratna.batch.springbatchprocessing.model.StudentCsv;
+import com.ratna.batch.springbatchprocessing.model.StudentResponse;
 import com.ratna.batch.springbatchprocessing.writer.StudentWriter;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -8,6 +9,7 @@ import org.springframework.batch.core.configuration.annotation.JobBuilderFactory
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.item.adapter.ItemReaderAdapter;
 import org.springframework.batch.item.database.JdbcCursorItemReader;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
@@ -16,11 +18,15 @@ import org.springframework.batch.item.json.JacksonJsonObjectReader;
 import org.springframework.batch.item.json.JsonItemReader;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.ClassPathResource;
 
 import javax.sql.DataSource;
+import java.util.List;
 
 @Configuration
 public class JobConfig {
@@ -43,8 +49,21 @@ public class JobConfig {
     @Autowired
     private StudentWriter studentWriter;
 
-    @Autowired
-    private DataSource dataSource;
+//    @Autowired
+//    private StudentService studentService;
+
+    @Bean
+    @Primary
+    @ConfigurationProperties(prefix = "spring.datasource")
+    public DataSource datasource() {
+        return DataSourceBuilder.create().build();
+    }
+
+    @Bean
+    @ConfigurationProperties(prefix = "spring.batchdatasource")
+    public DataSource batchdatasource() {
+        return DataSourceBuilder.create().build();
+    }
 
     @Bean
     public Job chunkJob() {
@@ -56,7 +75,7 @@ public class JobConfig {
 
     private Step firstChunkStep() {
         return stepBuilderFactory.get("First chunk Step")
-                .<StudentCsv, StudentCsv>chunk(2)
+                .<StudentResponse, StudentResponse>chunk(2)
                 .reader(jdbcCursonItemReader())
                 .writer(studentWriter)
                 .build();
@@ -96,12 +115,13 @@ public class JobConfig {
         return jsonItemReader;
     }
 
-    public JdbcCursorItemReader<StudentCsv> jdbcCursonItemReader() {
-        JdbcCursorItemReader<StudentCsv> jdbcCursorItemReader = new JdbcCursorItemReader<>();
-        jdbcCursorItemReader.setDataSource(dataSource);
+    public JdbcCursorItemReader<StudentResponse> jdbcCursonItemReader() {
+        JdbcCursorItemReader<StudentResponse> jdbcCursorItemReader = new JdbcCursorItemReader<>();
+        jdbcCursorItemReader.setDataSource(datasource());
+        jdbcCursorItemReader.setDataSource(batchdatasource());
         jdbcCursorItemReader.setSql("select * from student");
         jdbcCursorItemReader.setRowMapper((resultSet, i) -> {
-            StudentCsv studentCsv = new StudentCsv();
+            StudentResponse studentCsv = new StudentResponse();
             studentCsv.setId(resultSet.getLong("id"));
             studentCsv.setFirstName(resultSet.getString("first_name"));
             studentCsv.setLastName(resultSet.getString("last_name"));
@@ -110,5 +130,14 @@ public class JobConfig {
         });
         return jdbcCursorItemReader;
     }
+
+    /*region Description
+    public ItemReaderAdapter<StudentResponse> itemReaderAdapter() {
+        ItemReaderAdapter<StudentResponse> itemReaderAdapter = new ItemReaderAdapter<>();
+        itemReaderAdapter.setTargetObject(studentService);
+        itemReaderAdapter.setTargetMethod("getStudent");
+        return itemReaderAdapter;
+    }
+    **/
 
 }
